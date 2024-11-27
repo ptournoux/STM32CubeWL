@@ -36,11 +36,17 @@
 #include "flash_if.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "esiroi_compress.h"
 /* USER CODE END Includes */
 
 /* External variables ---------------------------------------------------------*/
 /* USER CODE BEGIN EV */
+extern RTC_HandleTypeDef hrtc;
+//extern int16_t esiroi_compute_average(int16_t * tab, uint16_t nbElem);
+
+//extern void esiroi_collect_temperature(float sample_float, uint32_t esiroi_timestamp);
+
+//extern void esiroi_compress_and_format(uint8_t *app_data_buff, uint8_t *app_data_size);
 
 /* USER CODE END EV */
 
@@ -234,6 +240,21 @@ static void OnRxTimerLedEvent(void *context);
   */
 static void OnJoinTimerLedEvent(void *context);
 
+
+/**
+  * @brief collect temperature on event
+  * @param  none
+  */
+static void collect_temperature();
+
+
+/**
+  * @brief  LED Join timer callback function
+  * @param  context ptr of LED context
+  */
+static void OnPeriodicMessageCollectTimerEvent(void *context);
+
+
 /* USER CODE END PFP */
 
 /* Private variables ---------------------------------------------------------*/
@@ -308,6 +329,11 @@ static UTIL_TIMER_Time_t TxPeriodicity = APP_TX_DUTYCYCLE;
 static UTIL_TIMER_Object_t StopJoinTimer;
 
 /* USER CODE BEGIN PV */
+
+static UTIL_TIMER_Object_t PeriodicCollectTimer;
+
+
+
 /**
   * @brief User application buffer
   */
@@ -389,7 +415,6 @@ void LoRaWAN_Init(void)
   UTIL_TIMER_Create(&TxLedTimer, LED_PERIOD_TIME, UTIL_TIMER_ONESHOT, OnTxTimerLedEvent, NULL);
   UTIL_TIMER_Create(&RxLedTimer, LED_PERIOD_TIME, UTIL_TIMER_ONESHOT, OnRxTimerLedEvent, NULL);
   UTIL_TIMER_Create(&JoinLedTimer, LED_PERIOD_TIME, UTIL_TIMER_PERIODIC, OnJoinTimerLedEvent, NULL);
-
   if (FLASH_IF_Init(NULL) != FLASH_IF_OK)
   {
     Error_Handler();
@@ -414,11 +439,14 @@ void LoRaWAN_Init(void)
   LmHandlerConfigure(&LmHandlerParams);
 
   /* USER CODE BEGIN LoRaWAN_Init_2 */
+  UTIL_SEQ_RegTask((1 << CFG_SEQ_Task_PeriodicCollectTimer), UTIL_SEQ_RFU, collect_temperature);
   UTIL_TIMER_Start(&JoinLedTimer);
 
+  UTIL_TIMER_Create(&PeriodicCollectTimer, COLLECT_PERIOD_TIME, UTIL_TIMER_PERIODIC, OnPeriodicMessageCollectTimerEvent, NULL);
+  UTIL_TIMER_Start(&PeriodicCollectTimer);
   /* USER CODE END LoRaWAN_Init_2 */
 
-  LmHandlerJoin(ActivationType, ForceRejoin);
+  //LmHandlerJoin(ActivationType, ForceRejoin);
 
   if (EventType == TX_ON_TIMER)
   {
@@ -439,18 +467,15 @@ void LoRaWAN_Init(void)
 }
 
 /* USER CODE BEGIN PB_Callbacks */
+static void OnPeriodicMessageCollectTimerEvent(void *context)
+{
+  UTIL_SEQ_SetTask((1 << CFG_SEQ_Task_PeriodicCollectTimer), CFG_SEQ_Prio_0);
+}
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   switch (GPIO_Pin)
   {
-    case  BUT1_Pin:
-      /* Note: when "EventType == TX_ON_TIMER" this GPIO is not initialized */
-      if (EventType == TX_ON_EVENT)
-      {
-        UTIL_SEQ_SetTask((1 << CFG_SEQ_Task_LoRaSendOnTxTimerOrButtonEvent), CFG_SEQ_Prio_0);
-      }
-      break;
     case  BUT2_Pin:
       UTIL_SEQ_SetTask((1 << CFG_SEQ_Task_LoRaStopJoinEvent), CFG_SEQ_Prio_0);
       break;
@@ -466,6 +491,28 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 /* Private functions ---------------------------------------------------------*/
 /* USER CODE BEGIN PrFD */
+static void collect_temperature(void){
+	// nothing todo... yet
+	RTC_TimeTypeDef sTime;
+	RTC_DateTypeDef sDate;
+	// Retrieve the time
+	HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+	// Retrieve the date
+	HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+	// Combine to create a timestamp
+	uint32_t timestamp = (sDate.Year + 2000 - 1970) * 365 * 24 * 3600 + // Years to seconds
+	                     (sDate.Month - 1) * 30 * 24 * 3600 +          // Months to seconds
+	                     sDate.Date * 24 * 3600 +                     // Days to seconds
+	                     sTime.Hours * 3600 +                         // Hours to seconds
+	                     sTime.Minutes * 60 +
+	                     sTime.Seconds;
+	sensor_t sensor_data;
+	EnvSensors_Read(&sensor_data);
+	APP_LOG(TS_OFF, VLEVEL_M, "collect_temperature %d ts: %d \r\n",(uint16_t) sensor_data.temperature*1000,timestamp);
+	esiroi_collect_temperature(sensor_data.temperature,timestamp);
+}
+
+
 
 /* USER CODE END PrFD */
 
@@ -553,85 +600,13 @@ static void SendTxData(void)
 {
   /* USER CODE BEGIN SendTxData_1 */
   LmHandlerErrorStatus_t status = LORAMAC_HANDLER_ERROR;
-  uint8_t batteryLevel = GetBatteryLevel();
-  sensor_t sensor_data;
   UTIL_TIMER_Time_t nextTxIn = 0;
 
   if (LmHandlerIsBusy() == false)
   {
-#ifdef CAYENNE_LPP
-    uint8_t channel = 0;
-#else
-    uint16_t pressure = 0;
-    int16_t temperature = 0;
-    uint16_t humidity = 0;
-    uint32_t i = 0;
-    int32_t latitude = 0;
-    int32_t longitude = 0;
-    uint16_t altitudeGps = 0;
-#endif /* CAYENNE_LPP */
-
-    EnvSensors_Read(&sensor_data);
-
-    APP_LOG(TS_ON, VLEVEL_M, "VDDA: %d\r\n", batteryLevel);
-    APP_LOG(TS_ON, VLEVEL_M, "temp: %d\r\n", (int16_t)(sensor_data.temperature));
-
+    APP_LOG(TS_ON, VLEVEL_M, "SendTxData");
     AppData.Port = LORAWAN_USER_APP_PORT;
-
-#ifdef CAYENNE_LPP
-    CayenneLppReset();
-    CayenneLppAddBarometricPressure(channel++, sensor_data.pressure);
-    CayenneLppAddTemperature(channel++, sensor_data.temperature);
-    CayenneLppAddRelativeHumidity(channel++, (uint16_t)(sensor_data.humidity));
-
-    if ((LmHandlerParams.ActiveRegion != LORAMAC_REGION_US915) && (LmHandlerParams.ActiveRegion != LORAMAC_REGION_AU915)
-        && (LmHandlerParams.ActiveRegion != LORAMAC_REGION_AS923))
-    {
-      CayenneLppAddDigitalInput(channel++, GetBatteryLevel());
-      CayenneLppAddDigitalOutput(channel++, AppLedStateOn);
-    }
-
-    CayenneLppCopy(AppData.Buffer);
-    AppData.BufferSize = CayenneLppGetSize();
-#else  /* not CAYENNE_LPP */
-    humidity    = (uint16_t)(sensor_data.humidity * 10);            /* in %*10     */
-    temperature = (int16_t)(sensor_data.temperature);
-    pressure = (uint16_t)(sensor_data.pressure * 100 / 10); /* in hPa / 10 */
-
-    AppData.Buffer[i++] = AppLedStateOn;
-    AppData.Buffer[i++] = (uint8_t)((pressure >> 8) & 0xFF);
-    AppData.Buffer[i++] = (uint8_t)(pressure & 0xFF);
-    AppData.Buffer[i++] = (uint8_t)(temperature & 0xFF);
-    AppData.Buffer[i++] = (uint8_t)((humidity >> 8) & 0xFF);
-    AppData.Buffer[i++] = (uint8_t)(humidity & 0xFF);
-
-    if ((LmHandlerParams.ActiveRegion == LORAMAC_REGION_US915) || (LmHandlerParams.ActiveRegion == LORAMAC_REGION_AU915)
-        || (LmHandlerParams.ActiveRegion == LORAMAC_REGION_AS923))
-    {
-      AppData.Buffer[i++] = 0;
-      AppData.Buffer[i++] = 0;
-      AppData.Buffer[i++] = 0;
-      AppData.Buffer[i++] = 0;
-    }
-    else
-    {
-      latitude = sensor_data.latitude;
-      longitude = sensor_data.longitude;
-
-      AppData.Buffer[i++] = GetBatteryLevel();        /* 1 (very low) to 254 (fully charged) */
-      AppData.Buffer[i++] = (uint8_t)((latitude >> 16) & 0xFF);
-      AppData.Buffer[i++] = (uint8_t)((latitude >> 8) & 0xFF);
-      AppData.Buffer[i++] = (uint8_t)(latitude & 0xFF);
-      AppData.Buffer[i++] = (uint8_t)((longitude >> 16) & 0xFF);
-      AppData.Buffer[i++] = (uint8_t)((longitude >> 8) & 0xFF);
-      AppData.Buffer[i++] = (uint8_t)(longitude & 0xFF);
-      AppData.Buffer[i++] = (uint8_t)((altitudeGps >> 8) & 0xFF);
-      AppData.Buffer[i++] = (uint8_t)(altitudeGps & 0xFF);
-    }
-
-    AppData.BufferSize = i;
-#endif /* CAYENNE_LPP */
-
+    esiroi_compress_and_format(AppData.Buffer,&AppData.BufferSize);
     if ((JoinLedTimer.IsRunning) && (LmHandlerJoinStatus() == LORAMAC_HANDLER_SET))
     {
       UTIL_TIMER_Stop(&JoinLedTimer);

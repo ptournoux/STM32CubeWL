@@ -133,7 +133,11 @@ extern "C" {
 
 /* Exported macros -----------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+/*!
+ * Defines the application data transmission duty cycle. 10s, value in [ms].
+ */
+#define COLLECT_PERIOD_TIME                            1000
+#define ESIROI_SAMPLE_BUFFER_MAX_SIZE 1200
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
