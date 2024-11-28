@@ -20,13 +20,9 @@
 #include "main.h"
 #include "app_lorawan.h"
 #include "gpio.h"
-#include "rtc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stm32wlxx.h"           // Définit les périphériques spécifiques au STM32WL
-#include "stm32wlxx_hal_rcc.h"   // Pour la configuration des horloges (LSE, etc.)
-#include "stm32wlxx_hal_rtc.h"   // Pour les macros liées à la RTC
 
 /* USER CODE END Includes */
 
@@ -84,16 +80,14 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_LoRaWAN_Init();
   /* USER CODE BEGIN 2 */
-  MX_RTC_Init();
-  //RTC_Init();
-  //RTC_Initialize();
+  //MX_RTC_Init();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -128,8 +122,8 @@ void SystemClock_Config(void)
 
   /** Initializes the CPU, AHB and APB buses clocks
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.LSEState = RCC_LSE_OFF;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_11;
@@ -157,28 +151,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void RTC_Init(void) {
-
-    // Activer l'horloge RTC
-    __HAL_RCC_RTC_ENABLE();
-
-    // Configuration de base RTC avec HAL
-    hrtc.Instance = RTC;
-    hrtc.Init.HourFormat = RTC_HOURFORMAT_24; // Format 24 heures
-    hrtc.Init.AsynchPrediv = 127;             // Prescaler asynchrone
-    hrtc.Init.SynchPrediv = 255;              // Prescaler synchrone
-    hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;    // Pas de signal de sortie
-    hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
-    hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-    hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-    if (HAL_RTC_Init(&hrtc) != HAL_OK) {
-        Error_Handler();
-    }
-    RCC->BDCR |= RCC_BDCR_LSEON;
-    while (!(RCC->BDCR & RCC_BDCR_LSERDY));
-    if(1)0;
-}
-
 
 /* USER CODE END 4 */
 

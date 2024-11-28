@@ -493,19 +493,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 /* USER CODE BEGIN PrFD */
 static void collect_temperature(void){
 	// nothing todo... yet
-	RTC_TimeTypeDef sTime;
-	RTC_DateTypeDef sDate;
-	// Retrieve the time
-	HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-	// Retrieve the date
-	HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-	// Combine to create a timestamp
-	uint32_t timestamp = (sDate.Year + 2000 - 1970) * 365 * 24 * 3600 + // Years to seconds
-	                     (sDate.Month - 1) * 30 * 24 * 3600 +          // Months to seconds
-	                     sDate.Date * 24 * 3600 +                     // Days to seconds
-	                     sTime.Hours * 3600 +                         // Hours to seconds
-	                     sTime.Minutes * 60 +
-	                     sTime.Seconds;
+	SysTime_t sysTime = SysTimeGet();
+    // Conversion en timestamp UNIX
+    uint32_t timestamp = sysTime.Seconds;
 	sensor_t sensor_data;
 	EnvSensors_Read(&sensor_data);
 	APP_LOG(TS_OFF, VLEVEL_M, "collect_temperature %d ts: %d \r\n",(uint16_t) sensor_data.temperature*1000,timestamp);
