@@ -51,7 +51,7 @@ extern "C" {
 /*!
  * Defines the application data transmission duty cycle. 10s, value in [ms].
  */
-#define APP_TX_DUTYCYCLE                            10000
+#define APP_TX_DUTYCYCLE                            60000
 
 /*!
  * LoRaWAN User application port
@@ -138,6 +138,8 @@ extern "C" {
  */
 #define COLLECT_PERIOD_TIME                            1000
 #define ESIROI_SAMPLE_BUFFER_MAX_SIZE 1200
+// Sync once per hour
+#define DEVICE_TIME_UPDATE_PERIOD_TIME  3600000
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

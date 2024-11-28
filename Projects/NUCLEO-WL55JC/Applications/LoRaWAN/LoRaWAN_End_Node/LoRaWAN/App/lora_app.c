@@ -249,11 +249,18 @@ static void collect_temperature();
 
 
 /**
+  * @brief collect temperature on event
+  * @param  none
+  */
+static void SynchronizeDeviceTime();
+
+/**
   * @brief  LED Join timer callback function
   * @param  context ptr of LED context
   */
 static void OnPeriodicMessageCollectTimerEvent(void *context);
 
+static void OnPeriodicMessageSynchronizeDeviceTime(void *context);
 
 /* USER CODE END PFP */
 
@@ -331,7 +338,7 @@ static UTIL_TIMER_Object_t StopJoinTimer;
 /* USER CODE BEGIN PV */
 
 static UTIL_TIMER_Object_t PeriodicCollectTimer;
-
+static UTIL_TIMER_Object_t PeriodicSysTimeUpdateTimer;
 
 
 /**
@@ -440,13 +447,15 @@ void LoRaWAN_Init(void)
 
   /* USER CODE BEGIN LoRaWAN_Init_2 */
   UTIL_SEQ_RegTask((1 << CFG_SEQ_Task_PeriodicCollectTimer), UTIL_SEQ_RFU, collect_temperature);
+  UTIL_SEQ_RegTask((1 << CFG_SEQ_Task_SynchronizeDeviceTimeTimer), UTIL_SEQ_RFU, SynchronizeDeviceTime);
   UTIL_TIMER_Start(&JoinLedTimer);
 
   UTIL_TIMER_Create(&PeriodicCollectTimer, COLLECT_PERIOD_TIME, UTIL_TIMER_PERIODIC, OnPeriodicMessageCollectTimerEvent, NULL);
+  UTIL_TIMER_Create(&PeriodicSysTimeUpdateTimer, DEVICE_TIME_UPDATE_PERIOD_TIME, UTIL_TIMER_PERIODIC, OnPeriodicMessageSynchronizeDeviceTime, NULL);
   UTIL_TIMER_Start(&PeriodicCollectTimer);
   /* USER CODE END LoRaWAN_Init_2 */
 
-  //LmHandlerJoin(ActivationType, ForceRejoin);
+  LmHandlerJoin(ActivationType, ForceRejoin);
 
   if (EventType == TX_ON_TIMER)
   {
@@ -470,6 +479,11 @@ void LoRaWAN_Init(void)
 static void OnPeriodicMessageCollectTimerEvent(void *context)
 {
   UTIL_SEQ_SetTask((1 << CFG_SEQ_Task_PeriodicCollectTimer), CFG_SEQ_Prio_0);
+}
+
+static void OnPeriodicMessageSynchronizeDeviceTime(void *context)
+{
+  UTIL_SEQ_SetTask((1 << CFG_SEQ_Task_SynchronizeDeviceTimeTimer), CFG_SEQ_Prio_0);
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
@@ -498,11 +512,18 @@ static void collect_temperature(void){
     uint32_t timestamp = sysTime.Seconds;
 	sensor_t sensor_data;
 	EnvSensors_Read(&sensor_data);
-	APP_LOG(TS_OFF, VLEVEL_M, "collect_temperature %d ts: %d \r\n",(uint16_t) sensor_data.temperature*1000,timestamp);
+	APP_LOG(TS_OFF, VLEVEL_H, "collect_temperature %d ts: %d \r\n",(uint16_t) sensor_data.temperature*1000,timestamp);
 	esiroi_collect_temperature(sensor_data.temperature,timestamp);
 }
 
-
+static void SynchronizeDeviceTime(void){
+	LmHandlerErrorStatus_t status = LmHandlerDeviceTimeReq();
+	    if (status == LORAMAC_HANDLER_SUCCESS) {
+	    	APP_LOG(TS_OFF, VLEVEL_M, "Request DeviceTimeReq sent.\n");
+	    } else {
+	    	APP_LOG(TS_OFF, VLEVEL_M,"Failed to send DeviceTimeReq.\n");
+	    }
+}
 
 /* USER CODE END PrFD */
 
@@ -597,6 +618,8 @@ static void SendTxData(void)
     APP_LOG(TS_ON, VLEVEL_M, "SendTxData");
     AppData.Port = LORAWAN_USER_APP_PORT;
     esiroi_compress_and_format(AppData.Buffer,&AppData.BufferSize);
+    APP_LOG(TS_ON, VLEVEL_L, "Send %d bytes  : ts %d avg %d \r\n", AppData.BufferSize,*(uint32_t*)AppData.Buffer,*(uint16_t*)(AppData.Buffer+4));
+    APP_LOG(TS_ON, VLEVEL_L, "Hex %X %X %X %X %X %X \r\n", (uint8_t) AppData.Buffer[0],(uint8_t) AppData.Buffer[1], (uint8_t)AppData.Buffer[2],(uint8_t) AppData.Buffer[3], (uint8_t)AppData.Buffer[4], (uint8_t)AppData.Buffer[5]);
     if ((JoinLedTimer.IsRunning) && (LmHandlerJoinStatus() == LORAMAC_HANDLER_SET))
     {
       UTIL_TIMER_Stop(&JoinLedTimer);
@@ -707,6 +730,8 @@ static void OnJoinRequest(LmHandlerJoinParams_t *joinParams)
       else
       {
         APP_LOG(TS_OFF, VLEVEL_M, "OTAA =====================\r\n");
+        APP_LOG(TS_OFF, VLEVEL_H, "Set CFG_SEQ_Task_SynchronizeDeviceTimeTimer");
+        UTIL_SEQ_SetTask((1 << CFG_SEQ_Task_SynchronizeDeviceTimeTimer), CFG_SEQ_Prio_0);
       }
     }
     else
@@ -716,6 +741,8 @@ static void OnJoinRequest(LmHandlerJoinParams_t *joinParams)
 
     APP_LOG(TS_OFF, VLEVEL_H, "###### U/L FRAME:JOIN | DR:%d | PWR:%d\r\n", joinParams->Datarate, joinParams->TxPower);
   }
+  // Ask for time !
+
   /* USER CODE END OnJoinRequest_1 */
 }
 
@@ -757,7 +784,8 @@ static void OnBeaconStatusChange(LmHandlerBeaconParams_t *params)
 static void OnSysTimeUpdate(void)
 {
   /* USER CODE BEGIN OnSysTimeUpdate_1 */
-
+	SysTime_t currentTime = SysTimeGet();
+	APP_LOG(TS_OFF, VLEVEL_M,"OnSysTimeUpdate: %lu \n", currentTime.Seconds);
   /* USER CODE END OnSysTimeUpdate_1 */
 }
 

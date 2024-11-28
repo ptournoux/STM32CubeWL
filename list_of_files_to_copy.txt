@@ -1,5 +1,6 @@
 STM32CubeWL/Projects/NUCLEO-WL55JC/Applications/LoRaWAN/LoRaWAN_End_Node/LoRaWAN/App/lora_app.c
 STM32CubeWL/Projects/NUCLEO-WL55JC/Applications/LoRaWAN/LoRaWAN_End_Node/LoRaWAN/App/lora_app.h
+STM32CubeWL/Projects/NUCLEO-WL55JC/Applications/LoRaWAN/LoRaWAN_End_Node/LoRaWAN/App/se_identity.h
 STM32CubeWL/Projects/NUCLEO-WL55JC/Applications/LoRaWAN/LoRaWAN_End_Node/Core/Src/main.c
 STM32CubeWL/Projects/NUCLEO-WL55JC/Applications/LoRaWAN/LoRaWAN_End_Node/STM32CubeIDE/Application/User/Core/esiroi_compress.c
 STM32CubeWL/Projects/NUCLEO-WL55JC/Applications/LoRaWAN/LoRaWAN_End_Node/Core/Inc/utilities_def.h
