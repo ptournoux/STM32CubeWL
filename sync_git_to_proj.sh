@@ -1,0 +1,1 @@
+sh copy_files_to_git.sh /home/tournoux/work/stm32/STM32WL_TOUR_FORK/ /mnt/c/Users/esiroi.138794-1/Downloads/ list_of_files_to_copy.txt
